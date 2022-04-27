@@ -3,8 +3,8 @@ package entrypoint
 import (
 	"context"
 	//"github.com/datawire/dlib/derror"
-	"github.com/datawire/ambassador/v2/pkg/api/getambassador.io/v3alpha1"
-	"github.com/datawire/ambassador/v2/pkg/kates"
+	"github.com/emissary-ingress/emissary/v3/pkg/api/getambassador.io/v3alpha1"
+	"github.com/emissary-ingress/emissary/v3/pkg/kates"
 )
 
 // This is a gross hack to remove all AuthServices using protocol_version: v2 only when running Edge-Stack and then inject an

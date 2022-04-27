@@ -4,11 +4,11 @@ package cache_test
 import (
 	"testing"
 
-	route "github.com/datawire/ambassador/v2/pkg/api/envoy/config/route/v3"
-	discovery "github.com/datawire/ambassador/v2/pkg/api/envoy/service/discovery/v3"
-	"github.com/datawire/ambassador/v2/pkg/envoy-control-plane/cache/types"
-	"github.com/datawire/ambassador/v2/pkg/envoy-control-plane/cache/v3"
-	"github.com/datawire/ambassador/v2/pkg/envoy-control-plane/resource/v3"
+	route "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/config/route/v3"
+	discovery "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/service/discovery/v3"
+	"github.com/emissary-ingress/emissary/v3/pkg/envoy-control-plane/cache/types"
+	"github.com/emissary-ingress/emissary/v3/pkg/envoy-control-plane/cache/v3"
+	"github.com/emissary-ingress/emissary/v3/pkg/envoy-control-plane/resource/v3"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/stretchr/testify/assert"

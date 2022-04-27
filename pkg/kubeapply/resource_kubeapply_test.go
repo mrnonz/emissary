@@ -4,10 +4,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/datawire/ambassador/v2/pkg/dtest"
-	"github.com/datawire/ambassador/v2/pkg/kubeapply"
 	"github.com/datawire/dlib/dexec"
 	"github.com/datawire/dlib/dlog"
+	"github.com/emissary-ingress/emissary/v3/pkg/dtest"
+	"github.com/emissary-ingress/emissary/v3/pkg/kubeapply"
 )
 
 func TestDocker(t *testing.T) {
