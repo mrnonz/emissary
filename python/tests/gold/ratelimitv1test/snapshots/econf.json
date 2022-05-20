@@ -4,8 +4,8 @@
       {
         "name": "static_layer",
         "static_layer": {
-          "envoy.reloadable_features.enable_deprecated_v2_api": true,
-          "re2.max_program_size.error_level": 200
+          "re2.max_program_size.error_level": 200,
+          "envoy.reloadable_features.no_extension_lookup_by_name": false
         }
       }
     ]
@@ -146,7 +146,7 @@
                               "cluster_name": "cluster_ratelimitv1test_rlsgrpc_default"
                             }
                           },
-                          "transport_api_version": "V2"
+                          "transport_api_version": "V3"
                         },
                         "request_type": "both",
                         "timeout": "0.500s"
@@ -430,7 +430,7 @@
                               "cluster_name": "cluster_ratelimitv1test_rlsgrpc_default"
                             }
                           },
-                          "transport_api_version": "V2"
+                          "transport_api_version": "V3"
                         },
                         "request_type": "both",
                         "timeout": "0.500s"
@@ -734,7 +734,7 @@
                               "cluster_name": "cluster_ratelimitv1test_rlsgrpc_default"
                             }
                           },
-                          "transport_api_version": "V2"
+                          "transport_api_version": "V3"
                         },
                         "request_type": "both",
                         "timeout": "0.500s"
@@ -1018,7 +1018,7 @@
                               "cluster_name": "cluster_ratelimitv1test_rlsgrpc_default"
                             }
                           },
-                          "transport_api_version": "V2"
+                          "transport_api_version": "V3"
                         },
                         "request_type": "both",
                         "timeout": "0.500s"

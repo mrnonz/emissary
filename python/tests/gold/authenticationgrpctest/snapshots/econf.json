@@ -4,8 +4,8 @@
       {
         "name": "static_layer",
         "static_layer": {
-          "envoy.reloadable_features.enable_deprecated_v2_api": true,
-          "re2.max_program_size.error_level": 200
+          "re2.max_program_size.error_level": 200,
+          "envoy.reloadable_features.no_extension_lookup_by_name": false
         }
       }
     ]
@@ -143,7 +143,7 @@
                           },
                           "timeout": "5.000s"
                         },
-                        "transport_api_version": "V2"
+                        "transport_api_version": "V3"
                       }
                     },
                     {
@@ -518,7 +518,7 @@
                           },
                           "timeout": "5.000s"
                         },
-                        "transport_api_version": "V2"
+                        "transport_api_version": "V3"
                       }
                     },
                     {
@@ -913,7 +913,7 @@
                           },
                           "timeout": "5.000s"
                         },
-                        "transport_api_version": "V2"
+                        "transport_api_version": "V3"
                       }
                     },
                     {
@@ -1288,7 +1288,7 @@
                           },
                           "timeout": "5.000s"
                         },
-                        "transport_api_version": "V2"
+                        "transport_api_version": "V3"
                       }
                     },
                     {
