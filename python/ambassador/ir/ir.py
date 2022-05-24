@@ -90,7 +90,7 @@ class IR:
     hosts: Dict[str, IRHost]
     invalid: List[Dict]
     invalidate_groups_for: List[str]
-    # The key for listeners is "{bindaddr}-{port}" (see IRListener.bind_to())
+    # The key for listeners is "{socket_protocol}-{bindaddr}-{port}" (see IRListener.bind_to())
     listeners: Dict[str, IRListener]
     log_services: Dict[str, IRLogService]
     ratelimit: Optional[IRRateLimit]
@@ -270,8 +270,6 @@ class IR:
         self.groups = {}
         self.grpc_services = {}
         self.hosts = {}
-        # self.invalidate_groups_for is handled above.
-        # self.k8s_status_updates is handled below.
         self.listeners = {}
         self.log_services = {}
         self.outliers = {}
@@ -326,6 +324,27 @@ class IR:
 
         # After TLSContexts, grab Listeners...
         ListenerFactory.load_all(self, aconf)
+        
+        # mark all UDP listeners as http3_enabled, we then need to check to determine if it has a TCP companion Listener
+        # when a TCP listener that binds to the same address and port exists then it will be marked as http3_enabled as well
+        # By marking the TCP listener as http3_enabled it will have the `alt-svc` injected to notify clients such as browsers
+        # that http3 is supported.
+
+        # Note: at first glance it would seem this logic should sit inside the Listener class but it must check after all the listeners 
+        # are loaded to see if a companion TCP exists for a UDP Listner which isn't know at Listener instantiation time.
+        udp_listeners  = (l for l in self.listeners.values() if l.socket_protocol == "UDP")
+        for listener in udp_listeners:
+            listener.http3_enabled = True
+
+             ## this matches the `listener.bind_to` for a tcp listener
+            tcp_listener_key = f"tcp-{listener.bind_address}-{listener.port}"
+            companion_tcp_listener = self.listeners.get(tcp_listener_key, None)
+
+            if companion_tcp_listener != None:
+                companion_tcp_listener.http3_enabled = True
+            else:
+                self.logger.warn(f"Listener {listener.name}: no TCP listener found for {listener.bind_address}:{listener.port}. " \
+                        "It is recommended that you include a matching TCP listener so that the `alt-svc` header can notify clients of HTTP/3 support")
 
         # ...then grab whatever we know about Hosts...
         HostFactory.load_all(self, aconf)
@@ -868,10 +887,10 @@ class IR:
 
         extant_listener = self.listeners.get(listener_key, None)
         is_valid = True
-
         if extant_listener:
-            self.post_error("Duplicate listener %s on %s:%d; keeping definition from %s" %
-                            (listener.name, listener.bind_address, listener.port, extant_listener.location))
+            err_msg = f"Duplicate listener {listener.name} on {listener.socket_protocol.lower()}://{listener.bind_address}:{listener.port};" \
+                      f"; keeping definition from {extant_listener.location}"
+            self.post_error(err_msg)
             is_valid = False
 
         if is_valid:

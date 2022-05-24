@@ -125,11 +125,13 @@ class V3Listener(dict):
         super().__init__()
 
         self.config = config
+        self.http3_enabled = irlistener.http3_enabled
+        self.socket_protocol = irlistener.socket_protocol
         self.bind_address = irlistener.bind_address
         self.port = irlistener.port
         self.bind_to = f"{self.bind_address}-{self.port}"
 
-        bindstr = f"-{self.bind_address}" if (self.bind_address != "0.0.0.0") else ""
+        bindstr = f"-{irlistener.socket_protocol.lower()}-{self.bind_address}" if (self.bind_address != "0.0.0.0") else ""
         self.name = irlistener.name or f"ambassador-listener{bindstr}-{self.port}"
 
         self.use_proxy_proto = False
@@ -178,12 +180,16 @@ class V3Listener(dict):
                 # listener is OK with TLS-y things like a termination context, SNI,
                 # etc.
                 self._tls_ok = True
-                self.listener_filters.append({
-                    'name': 'envoy.filters.listener.tls_inspector',
-                    'typed_config': {
-                        '@type': 'type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector'
-                    }
-                })
+
+                ## When UDP we assume it is http/3 listener and configured for quic which has TLS built into the protocol
+                ## therefore, we only need to add this when protocol stack contains TCP
+                if self.isProtocolTCP():
+                    self.listener_filters.append({
+                        'name': 'envoy.filters.listener.tls_inspector',
+                        'typed_config': {
+                            '@type': 'type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector'
+                        }
+                    })
 
             if proto == "TCP":
                 # TCP doesn't require any specific listener filters, but it
@@ -401,6 +407,16 @@ class V3Listener(dict):
             'normalize_path': True
         }
 
+        # Instructs the HTTP Connection Mananger to support http/3 and which codec it should use.
+        # This is required for the UDP listener and its companion TCP listener that
+        # enables HTTP/3 upgrade via the `alt-svc` header
+        if self.http3_enabled:
+            base_http_config['http3_protocol_options'] = {}
+            if self.isProtocolTCP():
+                base_http_config['codec_type'] = "HTTP2"
+            else:
+                base_http_config['codec_type'] = "HTTP3"
+
         # Assemble base HTTP filters
         for f in self.config.ir.filters:
             v3hf: dict = V3HTTPFilter(f, self.config)
@@ -567,7 +583,7 @@ class V3Listener(dict):
             "socket_address": {
                 "address": self.bind_address,
                 "port_value": self.port,
-                "protocol": "TCP"
+                "protocol": self.socket_protocol ## "TCP" or "UDP"
             }
         }
 
@@ -853,6 +869,12 @@ class V3Listener(dict):
 
             filter_chain: Optional[Dict[str, Any]] = None
 
+            # http/3 is built on quic which has TLS built-in. This means that our UDP Listener will only ever need routes
+            # that match the TLS Filter chain and will diverge from the TCP listener in that it will not support redirect
+            # therefore, we can exclude duplicating the filterchain and routes and hitting it using http will fail
+            if (chain.type == "http") & self.isProtocolUDP():
+                continue
+
             if chain.type == "http":
                 # All HTTP chains get collapsed into one here, using domains to separate them.
                 # This works because we don't need to offer TLS certs (we can't anyway), and
@@ -902,7 +924,7 @@ class V3Listener(dict):
                     filter_chain_match['server_names'] = chain_hosts
 
                 # Likewise, an HTTPS chain will ask for TLS.
-                filter_chain_match["transport_protocol"] = "tls"
+                filter_chain_match["transport_protocol"] = "quic" if self.isProtocolUDP() else "tls"
 
                 if chain.context:
                     # ...uh. How could we not have a context if we're doing TLS?
@@ -910,13 +932,28 @@ class V3Listener(dict):
                     # filter_chain_match.
                     envoy_ctx = V3TLSContext(chain.context)
 
-                    filter_chain['transport_socket'] = {
+                    envoy_tls_config = {
                         'name': 'envoy.transport_sockets.tls',
                         'typed_config': {
                             '@type': 'type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext',
                             **envoy_ctx
                         }
                     }
+
+                    if self.isProtocolUDP():
+                        envoy_ctx.update_alpn("alpn_protocols", "h3,h3-29")
+
+                        envoy_tls_config = {
+                            'name': 'envoy.transport_sockets.quic',
+                            'typed_config': {
+                                '@type': 'type.googleapis.com/envoy.extensions.transport_sockets.quic.v3.QuicDownstreamTransport',
+                                'downstream_tls_context':{
+                                    **envoy_ctx
+                                }
+                            }
+                        }
+
+                    filter_chain['transport_socket'] = envoy_tls_config
 
                 # Finally, stash the match in the chain...
                 filter_chain["filter_chain_match"] = filter_chain_match
@@ -945,9 +982,26 @@ class V3Listener(dict):
                 if not vhost:
                     vhost = {
                         "name": f"{self.name}-{host.hostname}",
+                        "response_headers_to_add": [],
                         "domains": [ host.hostname ],
                         "routes": []
                     }
+
+                    if self.http3_enabled & (self.socket_protocol == "TCP"):
+                        # Setting the alternative service header, tells the client to use the alternate location for future requests.
+                        # Clients such as chrome/firefox, etc... require this to instruct it to start speaking http/3 with the server.
+                        # 
+                        # Additional reading on alt-svc header: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Alt-Svc
+                        # 
+                        # Hard-coding the max-age in seconds to be 1 day which is the default if not included.
+                        # The initial http/3 support will require the external load balancer to be served on port 443 for both UDP and TCP.
+                        # In the future, we will extend our CRD's to support different port configurations for h1/h2 and h3 
+                        #
+                        alt_svc_hdr = { "key": "alt-svc", "value": f"h3=\":443\"; ma=86400, h3-29=\":443\"; ma=86400"}
+
+                        vhost['response_headers_to_add'].append({ "header": alt_svc_hdr})
+                    else:
+                        del(vhost['response_headers_to_add'])
 
                     filter_chain["_vhosts"][host.hostname] = vhost
 
@@ -993,9 +1047,19 @@ class V3Listener(dict):
         listener = {
             "name": self.name,
             "address": self.address,
+            "enable_reuse_port": True,
+            "udp_listener_config": {},
             "filter_chains": self._filter_chains,
             "traffic_direction": self.traffic_direction
         }
+
+        if self.isProtocolUDP():
+            listener['udp_listener_config'] = {
+                'quic_options': {},
+                'downstream_socket_config': { 'prefer_gro': True }
+            }
+        else:
+            del(listener['udp_listener_config'])
 
         # We only want to add the buffer limit setting to the listener if specified in the module.
         # Otherwise, we want to leave it unset and allow Envoys Default 1MiB setting.
@@ -1020,6 +1084,14 @@ class V3Listener(dict):
             "HTTP" if self._base_http_config else "TCP",
             self.name, self.bind_address, self.port, self._security_model
         )
+
+    def isProtocolTCP(self) -> bool:
+        """Whether the listener is configured to use the TCP protocol or not?"""
+        return (self.socket_protocol == "TCP")
+
+    def isProtocolUDP(self) -> bool:
+        """Whether the listener is configured to use the UDP protocol or not?"""
+        return (self.socket_protocol == "UDP")
 
     @classmethod
     def generate(cls, config: 'V3Config') -> None:
