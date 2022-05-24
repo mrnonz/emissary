@@ -181,7 +181,7 @@ main() {
 		statnl_busy 'Building %q locally' "base-python:$tag"
 		iidfile=$(mktemp)
 		trap 'rm -f "$iidfile"' RETURN
-		docker build --iidfile="$iidfile" docker/base-python >&2
+		docker build --platform=linux/amd64 --iidfile="$iidfile" docker/base-python >&2
 		id=$(cat "$iidfile")
 		statnl_done 'done building'
 
