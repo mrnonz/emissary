@@ -129,7 +129,7 @@ class V3Listener(dict):
         self.socket_protocol = irlistener.socket_protocol
         self.bind_address = irlistener.bind_address
         self.port = irlistener.port
-        self.bind_to = f"{self.bind_address}-{self.port}"
+        self.bind_to = irlistener.bind_to()
 
         bindstr = f"-{irlistener.socket_protocol.lower()}-{self.bind_address}" if (self.bind_address != "0.0.0.0") else ""
         self.name = irlistener.name or f"ambassador-listener{bindstr}-{self.port}"
@@ -203,7 +203,6 @@ class V3Listener(dict):
                     # ...and make sure the group in question wants the same bind
                     # address that we do.
                     if irgroup.bind_to() != self.bind_to:
-                        # self.config.ir.logger.debug("V3Listener %s: skip TCPMappingGroup on %s", self.bind_to, irgroup.bind_to())
                         continue
 
                     self.add_tcp_group(irgroup)
