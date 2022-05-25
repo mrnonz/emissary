@@ -1044,7 +1044,7 @@ class V3Listener(dict):
             self._filter_chains.append(filter_chain)
 
     def as_dict(self) -> dict:
-        listener = {
+        listener: dict = {
             "name": self.name,
             "address": self.address,
             "enable_reuse_port": True,

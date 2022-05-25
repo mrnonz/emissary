@@ -340,7 +340,7 @@ class IR:
             tcp_listener_key = f"tcp-{listener.bind_address}-{listener.port}"
             companion_tcp_listener = self.listeners.get(tcp_listener_key, None)
 
-            if companion_tcp_listener != None:
+            if companion_tcp_listener is not None:
                 companion_tcp_listener.http3_enabled = True
             else:
                 self.logger.warn(f"Listener {listener.name}: no TCP listener found for {listener.bind_address}:{listener.port}. " \
